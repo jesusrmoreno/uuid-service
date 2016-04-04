@@ -13,7 +13,6 @@ Download the version for your OS from the releases page.
 [Releases](https://github.com/jesusrmoreno/uuid-service/releases)
 
 #API
-
 ## Get a new ID
 ```
 /id
