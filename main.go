@@ -8,6 +8,7 @@ import (
 
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
+	"github.com/jesusrmoreno/sad-squid"
 	"github.com/satori/go.uuid"
 	lediscfg "github.com/siddontang/ledisdb/config"
 	"github.com/siddontang/ledisdb/ledis"
@@ -69,6 +70,36 @@ func requestIDHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Printf("[GeneratedID] %s, %s\n", ip, idStr)
 }
 
+func namespacedSquidHandler(w http.ResponseWriter, r *http.Request) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		fmt.Println("[Error] Could not parse IP Address:", r.RemoteAddr)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	ns := mux.Vars(r)["namespace"]
+	idStr := squid.GenerateID()
+	if _, err := db.SAdd([]byte(ns), []byte(idStr)); err != nil {
+		fmt.Println("[Error] Could not store id for namespace:", ns, err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+	}
+	fmt.Fprintf(w, idStr)
+	fmt.Printf("[GeneratedID] %s, %s\n", ip, idStr)
+}
+
+// Generates a UUID V4 and sends it to the server, also logs the ID and IP
+func requestSquidHandler(w http.ResponseWriter, r *http.Request) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		fmt.Println("[Error] Could not parse IP Address:", r.RemoteAddr)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	idStr := squid.GenerateID()
+	fmt.Fprintf(w, idStr)
+	fmt.Printf("[GeneratedID] %s, %s\n", ip, idStr)
+}
+
 func main() {
 	port := flag.String("port", "3000", "The port to run on")
 	dbpath := flag.String("dbPath", "var", "The path to the database")
@@ -87,13 +118,16 @@ func main() {
 	r := mux.NewRouter()
 
 	r.StrictSlash(true)
+
+	r.HandleFunc("/squid", requestSquidHandler).
+		Methods("GET")
+	r.HandleFunc("/{namespace}/squid", namespacedSquidHandler).
+		Methods("GET")
 	r.HandleFunc("/id", requestIDHandler).
 		Methods("GET")
-
 	r.HandleFunc("/{namespace}/id", namespacedIDHandler).
 		Methods("GET")
-
-	r.HandleFunc("/{namespace}/id/exists/{uuid}", idInNameSpaceHandler).
+	r.HandleFunc("/{namespace}/exists/{uuid}", idInNameSpaceHandler).
 		Methods("GET")
 
 	n := negroni.Classic()
