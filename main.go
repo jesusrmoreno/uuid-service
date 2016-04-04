@@ -16,12 +16,14 @@ import (
 var db *ledis.DB
 
 func idInNameSpaceHandler(w http.ResponseWriter, r *http.Request) {
-	ns := r.URL.Query().Get("namespace")
-	id := r.URL.Query().Get("uuid")
+	vars := mux.Vars(r)
+
+	ns := vars["namespace"]
+	id := vars["uuid"]
 
 	isMember, err := db.SIsMember([]byte(ns), []byte(id))
 	if err != nil {
-		fmt.Println("[Error] Could not parse IP Address:", r.RemoteAddr)
+		fmt.Println("[Error] Database error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
@@ -42,11 +44,11 @@ func namespacedIDHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	ns := r.URL.Query().Get("namespace")
+	ns := mux.Vars(r)["namespace"]
 	id := uuid.NewV4()
 	idStr := id.String()
 	if _, err := db.SAdd([]byte(ns), []byte(idStr)); err != nil {
-		fmt.Println("[Error] Could not store id for namespace:", ns)
+		fmt.Println("[Error] Could not store id for namespace:", ns, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
 	fmt.Fprintf(w, idStr)
@@ -83,9 +85,17 @@ func main() {
 
 	// Start our router
 	r := mux.NewRouter()
-	r.HandleFunc("/", requestIDHandler)
-	r.HandleFunc("/ns", namespacedIDHandler)
-	r.HandleFunc("/exists", idInNameSpaceHandler)
+
+	r.StrictSlash(true)
+	r.HandleFunc("/id", requestIDHandler).
+		Methods("GET")
+
+	r.HandleFunc("/{namespace}/id", namespacedIDHandler).
+		Methods("GET")
+
+	r.HandleFunc("/{namespace}/id/exists/{uuid}", idInNameSpaceHandler).
+		Methods("GET")
+
 	n := negroni.Classic()
 	n.UseHandler(r)
 	n.Run(":" + *port)
