@@ -69,11 +69,19 @@ func requestIDHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	port := flag.String("port", "3000", "The port to run on")
+	dbpath := flag.String("dbPath", "var", "The path to the database")
 	flag.Parse()
+
+	// Sets the database path
 	cfg := lediscfg.NewConfigDefault()
+	if dbpath != nil && *dbpath != "var" {
+		fmt.Println(*dbpath)
+		cfg.DBPath = *dbpath
+	}
 	l, _ := ledis.Open(cfg)
 	db, _ = l.Select(0)
 
+	// Start our router
 	r := mux.NewRouter()
 	r.HandleFunc("/", requestIDHandler)
 	r.HandleFunc("/ns", namespacedIDHandler)
