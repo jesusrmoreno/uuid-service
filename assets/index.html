@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <title>UUID-Service</title>
+  </head>
+  <body>
+    <style>
+      html, body {
+        background-color: #FAFAFB;
+      }
+      * {
+        padding: 0;
+        margin: 0;
+        box-sizing: border-box;
+        font-family: monospace;
+      }
+      #main {
+        background-color: #FAFAFB;
+        height: 100vh;
+        padding: 0rem 0rem 2rem;
+      }
+      .main-wrapper {
+        max-width: 600px;
+        padding: 1rem 0rem 3rem;
+        margin: auto;
+      }
+      h1, h2, h3, h4, h5, h6 {
+        font-family: monospace;
+        padding: 0.2rem 0;
+      }
+      .wrapper {
+        padding: .5rem;
+      }
+      .heading {
+        padding: 1rem 0;
+      }
+      .display {
+        background: white;
+        padding: 1rem;
+        border-radius: 0px;
+        border: 1px solid;
+        border-color: #DEDEE6;
+      }
+      a {
+        color: #2BA94B;
+
+        text-decoration: none;
+      }
+      .big-link {
+        font-size: 1.1rem;
+        padding: .5rem 0rem;
+        display: inline-block;
+      }
+    </style>
+    <div id="main">
+      <div class="main-wrapper">
+        <div class="wrapper">
+          <div class="heading">
+            <h1>UUID Generator</h1>
+          </div>
+          <div class="display">
+            This application generates three different kinds of ids.<br/><br/>
+            Squid and Simple Squid are based off of Heroku and Asana style ids and are meant to be human readable and memorable.
+            <a class="big-link" href="https://blog.asana.com/2011/09/6-sad-squid-snuggle-softly/">More Info</a>
+          </div>
+        </div>
+        <div class="wrapper">
+          <div class="heading">
+            <h1>UUID V4</h1>
+            <a class="big-link" href="/new/uuid_v4" id="uuid-url">/new/uuid_v4</a>
+          </div>
+          <div class="display" id="uuid">
+
+          </div>
+        </div>
+        <div class="wrapper">
+          <div class="heading">
+            <h1>Squid</h1>
+            <a class="big-link" href="/new/squid" id="squid-url">/new/squid</a>
+          </div>
+          <div class="display" id="squid">
+
+          </div>
+        </div>
+        <div class="wrapper">
+          <div class="heading">
+            <h1>Simple Squid</h1>
+            <a class="big-link" href="/new/simplesquid" id="simple-squid-url">/new/simplesquid</a>
+          </div>
+          <div class="display" id="simple-squid">
+
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="js/jquery.js" integrity="sha256-36cp2Co+/62rEAAYHLmRCPIych47CvdM+uTBJwSzWjI=" crossorigin="anonymous"></script>
+    <script>
+
+      (function() {
+        var baseURL = window.location.href.toString()
+
+        function getIDS() {
+          $.get('/new/uuid_v4', function(data) {
+            $('#uuid').html(data)
+          });
+          $.get('/new/simplesquid', function(data) {
+            $('#simple-squid').html(data)
+          });
+          $.get('/new/squid', function(data) {
+            $('#squid').html(data)
+          });
+        }
+        $('#uuid-url').html(baseURL + "new/uuid_v4")
+        $('#squid-url').html(baseURL + "new/squid")
+        $('#simple-squid-url').html(baseURL + "new/simplesquid")
+
+        getIDS()
+        setInterval(getIDS, 1000)
+      })()
+    </script>
+  </body>
+</html>

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -15,6 +16,44 @@ import (
 )
 
 var db *ledis.DB
+
+const (
+	uuidV4      = "uuid_v4"
+	simplesquid = "simplesquid"
+	squidID     = "squid"
+
+	errInvalidIDType = "Invalid ID type"
+)
+
+func getID(kind string) (string, error) {
+	switch kind {
+	case uuidV4:
+		return uuid.NewV4().String(), nil
+	case simplesquid:
+		return squid.GenerateSimpleID(), nil
+	case squidID:
+		return squid.GenerateID(), nil
+	default:
+		return "", errors.New(errInvalidIDType)
+	}
+}
+
+func idRequestHandler(w http.ResponseWriter, r *http.Request) {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		fmt.Println("[Error] Could not parse IP Address:", r.RemoteAddr)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	idKind := mux.Vars(r)["idType"]
+	id, err := getID(idKind)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Fprintf(w, id)
+	fmt.Printf("[GeneratedID] %s, %s\n", ip, id)
+}
 
 func idInNameSpaceHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -38,6 +77,24 @@ func idInNameSpaceHandler(w http.ResponseWriter, r *http.Request) {
 	return
 }
 
+func allInNameSpaceHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	ns := vars["namespace"]
+	ids, err := db.SMembers([]byte(ns))
+	if err != nil {
+		fmt.Println("[Error] Database error:", err)
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+	response := []byte{}
+	for idIndex := range ids {
+		id := append(ids[idIndex], []byte("\n")...)
+		response = append(response, id...)
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write(response)
+}
+
 func namespacedIDHandler(w http.ResponseWriter, r *http.Request) {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
@@ -46,56 +103,16 @@ func namespacedIDHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ns := mux.Vars(r)["namespace"]
-	id := uuid.NewV4()
-	idStr := id.String()
+	idKind := mux.Vars(r)["idType"]
+	idStr, err := getID(idKind)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if _, err := db.SAdd([]byte(ns), []byte(idStr)); err != nil {
 		fmt.Println("[Error] Could not store id for namespace:", ns, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
-	fmt.Fprintf(w, idStr)
-	fmt.Printf("[GeneratedID] %s, %s\n", ip, idStr)
-}
-
-// Generates a UUID V4 and sends it to the server, also logs the ID and IP
-func requestIDHandler(w http.ResponseWriter, r *http.Request) {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		fmt.Println("[Error] Could not parse IP Address:", r.RemoteAddr)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	id := uuid.NewV4()
-	idStr := id.String()
-	fmt.Fprintf(w, idStr)
-	fmt.Printf("[GeneratedID] %s, %s\n", ip, idStr)
-}
-
-func namespacedSquidHandler(w http.ResponseWriter, r *http.Request) {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		fmt.Println("[Error] Could not parse IP Address:", r.RemoteAddr)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	ns := mux.Vars(r)["namespace"]
-	idStr := squid.GenerateID()
-	if _, err := db.SAdd([]byte(ns), []byte(idStr)); err != nil {
-		fmt.Println("[Error] Could not store id for namespace:", ns, err)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-	}
-	fmt.Fprintf(w, idStr)
-	fmt.Printf("[GeneratedID] %s, %s\n", ip, idStr)
-}
-
-// Generates a UUID V4 and sends it to the server, also logs the ID and IP
-func requestSquidHandler(w http.ResponseWriter, r *http.Request) {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		fmt.Println("[Error] Could not parse IP Address:", r.RemoteAddr)
-		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		return
-	}
-	idStr := squid.GenerateID()
 	fmt.Fprintf(w, idStr)
 	fmt.Printf("[GeneratedID] %s, %s\n", ip, idStr)
 }
@@ -116,20 +133,16 @@ func main() {
 
 	// Start our router
 	r := mux.NewRouter()
-
 	r.StrictSlash(true)
-
-	r.HandleFunc("/squid", requestSquidHandler).
+	r.HandleFunc("/new/{idType}", idRequestHandler).
 		Methods("GET")
-	r.HandleFunc("/{namespace}/squid", namespacedSquidHandler).
+	r.HandleFunc("/{namespace}/", allInNameSpaceHandler).
 		Methods("GET")
-	r.HandleFunc("/id", requestIDHandler).
+	r.HandleFunc("/{namespace}/new/{idType}", namespacedIDHandler).
 		Methods("GET")
-	r.HandleFunc("/{namespace}/id", namespacedIDHandler).
+	r.HandleFunc("/{namespace}/contains/{uuid}", idInNameSpaceHandler).
 		Methods("GET")
-	r.HandleFunc("/{namespace}/exists/{uuid}", idInNameSpaceHandler).
-		Methods("GET")
-
+	r.PathPrefix("/").Handler(http.FileServer(assetFS()))
 	n := negroni.Classic()
 	n.UseHandler(r)
 	n.Run(":" + *port)

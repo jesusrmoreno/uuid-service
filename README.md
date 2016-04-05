@@ -15,14 +15,23 @@ Download the version for your OS from the releases page.
 #API
 ## Get a new ID
 ```
-/id
+/new/uuid_v4
+/new/squid
+/new/simplesquid
 ```
 ## Returns a new UUID and saves it under the provided namespace
 ```
-/{namespace}/id
+/{namespace}/new/uuid_v4
+/{namespace}/new/squid
+/{namespace}/new/simplesquid
+```
+
+## Returns all ids in the given namespace
+```
+/{namespace}/
 ```
 
 ## Returns true if an id exists under that namespace
 ```
-/{namespace}/id/exists/{uuid}
+/{namespace}/contains/{uuid}
 ```
