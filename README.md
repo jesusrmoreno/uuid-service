@@ -30,6 +30,11 @@ Download the version for your OS from the releases page.
 ```
 /{namespace}/
 ```
+## Returns a new UUID and saves it under the provided namespace
+```
+/{namespace}/id
+/{namespace}/squid
+```
 
 ## Returns true if an id exists under that namespace
 ```
