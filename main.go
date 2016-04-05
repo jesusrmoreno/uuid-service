@@ -4,18 +4,19 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
 	"github.com/jesusrmoreno/sad-squid"
+	"github.com/jesusrmoreno/uuid-service/implementation"
+	"github.com/jesusrmoreno/uuid-service/interfaces"
 	"github.com/satori/go.uuid"
-	lediscfg "github.com/siddontang/ledisdb/config"
-	"github.com/siddontang/ledisdb/ledis"
 )
 
-var db *ledis.DB
+var db intf.IDStore
 
 const (
 	uuidV4      = "uuid_v4"
@@ -61,13 +62,13 @@ func idInNameSpaceHandler(w http.ResponseWriter, r *http.Request) {
 	ns := vars["namespace"]
 	id := vars["uuid"]
 
-	isMember, err := db.SIsMember([]byte(ns), []byte(id))
+	isMember, err := db.Contains(ns, id)
 	if err != nil {
 		fmt.Println("[Error] Database error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	if isMember == 0 {
+	if !isMember {
 		w.WriteHeader(http.StatusNotFound)
 		w.Write([]byte("false"))
 		return
@@ -80,19 +81,17 @@ func idInNameSpaceHandler(w http.ResponseWriter, r *http.Request) {
 func allInNameSpaceHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	ns := vars["namespace"]
-	ids, err := db.SMembers([]byte(ns))
+	ids, err := db.All(ns)
 	if err != nil {
 		fmt.Println("[Error] Database error:", err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
-	response := []byte{}
-	for idIndex := range ids {
-		id := append(ids[idIndex], []byte("\n")...)
-		response = append(response, id...)
+	response := ""
+	for _, id := range ids {
+		response += id + "\n"
 	}
-	w.WriteHeader(http.StatusOK)
-	w.Write(response)
+	fmt.Fprintf(w, response)
 }
 
 func namespacedIDHandler(w http.ResponseWriter, r *http.Request) {
@@ -109,27 +108,25 @@ func namespacedIDHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if _, err := db.SAdd([]byte(ns), []byte(idStr)); err != nil {
+	if _, err := db.Store(ns, idStr); err != nil {
 		fmt.Println("[Error] Could not store id for namespace:", ns, err)
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 	}
+	w.WriteHeader(200)
 	fmt.Fprintf(w, idStr)
 	fmt.Printf("[GeneratedID] %s, %s\n", ip, idStr)
 }
 
 func main() {
 	port := flag.String("port", "3000", "The port to run on")
-	dbpath := flag.String("dbPath", "var", "The path to the database")
-	flag.Parse()
-
-	// Sets the database path
-	cfg := lediscfg.NewConfigDefault()
-	if dbpath != nil && *dbpath != "var" {
-		fmt.Println(*dbpath)
-		cfg.DBPath = *dbpath
+	path := flag.String("dbPath", "namespaces.db", "The database name")
+	var err error
+	db, err = impl.NewBoltStore(*path)
+	if err != nil {
+		log.Fatal(err)
 	}
-	l, _ := ledis.Open(cfg)
-	db, _ = l.Select(0)
+
+	flag.Parse()
 
 	// Start our router
 	r := mux.NewRouter()
